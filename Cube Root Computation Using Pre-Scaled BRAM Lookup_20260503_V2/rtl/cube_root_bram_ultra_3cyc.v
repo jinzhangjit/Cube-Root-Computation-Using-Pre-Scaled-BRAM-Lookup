@@ -1,0 +1,231 @@
+//============================================================================
+// Module : cube_root_bram_ultra_3cyc
+// Paper  : An Ultra-Low Resource FPGA Architecture for Cube Root Computation
+//          Using Pre-Scaled BRAM Lookup
+//
+// Description:
+//   3-cycle pipelined cube root core using pre-scaled BRAM lookup.
+//   Output scaling factor 2^((k0+r)/3) is pre-integrated into the
+//   stored values T_r[i] , eliminating runtime
+//   multipliers.
+//
+// I/O format:
+//   radicand : Q2.22 fixed-point, range [0.5, 4)
+//   result   : Q1.23 fixed-point, cbrt(radicand)
+// Pipeline (3-cycle latency):
+//   Stage 0 (combinational): Range Detection + Bit Extraction
+//   Stage 1 (register)     : BRAM Address Register
+//   Stage 2 (BRAM)         : Synchronous BRAM Read
+//   Stage 3 (register)     : Output Register
+//
+// Verified resource utilization (Vivado 2018.3, Kintex-7 xc7k420t):
+//   7 LUTs, 36 FFs, 0 DSP, 0.5 BRAM (one 18Kb block)
+// Measured precision (exhaustive test on Q2.22 input space):
+//   Max relative error : 0.13%
+//   Effective precision: 9.6 bits
+//============================================================================
+
+`timescale 1ns/1ps
+
+module cube_root_bram_ultra_3cyc #(
+    parameter WIDTH = 24
+)(
+    input  wire                 clk,
+    input  wire                 rst_n,
+    input  wire                 start,       // input valid
+    input  wire [WIDTH-1:0]     radicand,    // Q2.22 input  [0.5, 4)
+    output reg                  done,        // output valid
+    output reg  [WIDTH-1:0]     result       // Q1.23 cube root
+);
+
+    //=========================================================================
+    // BRAM: 384 x 24-bit, single 18Kb block
+    //   Range 0 (addr 000-127): y in [0.5, 1)
+    //   Range 1 (addr 128-255): y in [1.0, 2)
+    //   Range 2 (addr 256-383): y in [2.0, 4)
+    //=========================================================================
+    (* ram_style = "block" *)
+    reg [WIDTH-1:0] bram [0:383];
+
+    //=========================================================================
+    // Pipeline signals
+    //=========================================================================
+    wire [1:0]      range_sel;        // r in {0,1,2}
+    wire [6:0]      frac_index;       // idx in [0, 127]
+    wire [8:0]      bram_addr_comb;   // {r, idx}
+
+    reg             valid_s1;
+    reg [8:0]       bram_addr_s1;
+    reg             valid_s2;
+    reg [WIDTH-1:0] bram_dout_s2;
+
+    //=========================================================================
+    // Stage 0: Combinational address calculation
+    //   Range detection (priority encoder, Eq. (4)):
+    //     y in [2,4)  -> Y[23] = 1 -> r = 2
+    //     y in [1,2)  -> Y[22] = 1 -> r = 1
+    //     y in [.5,1) ->            -> r = 0
+    //   Bit extraction (Eq. (8)) for n=22, k0=-1, b=7:
+    //     r=0 : Y[20:14]
+    //     r=1 : Y[21:15]
+    //     r=2 : Y[22:16]
+    //=========================================================================
+    assign range_sel = radicand[23] ? 2'd2 :
+                       radicand[22] ? 2'd1 :
+                                      2'd0;
+
+    assign frac_index = (range_sel == 2'd2) ? radicand[22:16] :
+                        (range_sel == 2'd1) ? radicand[21:15] :
+                                              radicand[20:14];
+
+    assign bram_addr_comb = {range_sel, frac_index};
+
+    //=========================================================================
+    // Stage 1: Address register
+    //=========================================================================
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            valid_s1     <= 1'b0;
+            bram_addr_s1 <= 9'd0;
+        end else begin
+            valid_s1     <= start;
+            bram_addr_s1 <= bram_addr_comb;
+        end
+    end
+
+    //=========================================================================
+    // Stage 2: BRAM synchronous read
+    //=========================================================================
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            valid_s2 <= 1'b0;
+        end else begin
+            valid_s2 <= valid_s1;
+        end
+    end
+
+    always @(posedge clk) begin
+        bram_dout_s2 <= bram[bram_addr_s1];
+    end
+
+    //=========================================================================
+    // Stage 3: Output register
+    //=========================================================================
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            done   <= 1'b0;
+            result <= {WIDTH{1'b0}};
+        end else begin
+            done   <= valid_s2;
+            result <= bram_dout_s2;
+        end
+    end
+
+    //=========================================================================
+    // BRAM initialization (auto-generated by gen_bram_init.py)
+    //   T_r[i] = round(2^23 * cbrt(L_r + (i+0.5)/N * W_r))
+    // Pre-scaling factor 2^((k0+r)/3) is implicitly contained in cbrt(y_{r,i})
+    //=========================================================================
+    initial begin
+    // Range 0: y in [0.50, 1.00)
+    bram[  0] = 24'h65B9CD; bram[  1] = 24'h65FD2E; bram[  2] = 24'h664036; bram[  3] = 24'h6682E7;
+    bram[  4] = 24'h66C542; bram[  5] = 24'h670747; bram[  6] = 24'h6748F8; bram[  7] = 24'h678A56;
+    bram[  8] = 24'h67CB62; bram[  9] = 24'h680C1D; bram[ 10] = 24'h684C88; bram[ 11] = 24'h688CA3;
+    bram[ 12] = 24'h68CC70; bram[ 13] = 24'h690BF0; bram[ 14] = 24'h694B23; bram[ 15] = 24'h698A0B;
+    bram[ 16] = 24'h69C8A9; bram[ 17] = 24'h6A06FC; bram[ 18] = 24'h6A4507; bram[ 19] = 24'h6A82C9;
+    bram[ 20] = 24'h6AC044; bram[ 21] = 24'h6AFD79; bram[ 22] = 24'h6B3A68; bram[ 23] = 24'h6B7712;
+    bram[ 24] = 24'h6BB378; bram[ 25] = 24'h6BEF9A; bram[ 26] = 24'h6C2B7A; bram[ 27] = 24'h6C6718;
+    bram[ 28] = 24'h6CA274; bram[ 29] = 24'h6CDD90; bram[ 30] = 24'h6D186C; bram[ 31] = 24'h6D5308;
+    bram[ 32] = 24'h6D8D66; bram[ 33] = 24'h6DC786; bram[ 34] = 24'h6E0169; bram[ 35] = 24'h6E3B0F;
+    bram[ 36] = 24'h6E7479; bram[ 37] = 24'h6EADA8; bram[ 38] = 24'h6EE69C; bram[ 39] = 24'h6F1F55;
+    bram[ 40] = 24'h6F57D5; bram[ 41] = 24'h6F901C; bram[ 42] = 24'h6FC82A; bram[ 43] = 24'h700000;
+    bram[ 44] = 24'h70379F; bram[ 45] = 24'h706F06; bram[ 46] = 24'h70A638; bram[ 47] = 24'h70DD33;
+    bram[ 48] = 24'h7113FA; bram[ 49] = 24'h714A8B; bram[ 50] = 24'h7180E8; bram[ 51] = 24'h71B711;
+    bram[ 52] = 24'h71ED06; bram[ 53] = 24'h7222C9; bram[ 54] = 24'h725859; bram[ 55] = 24'h728DB7;
+    bram[ 56] = 24'h72C2E4; bram[ 57] = 24'h72F7E0; bram[ 58] = 24'h732CAB; bram[ 59] = 24'h736145;
+    bram[ 60] = 24'h7395B0; bram[ 61] = 24'h73C9EC; bram[ 62] = 24'h73FDF8; bram[ 63] = 24'h7431D6;
+    bram[ 64] = 24'h746586; bram[ 65] = 24'h749909; bram[ 66] = 24'h74CC5D; bram[ 67] = 24'h74FF85;
+    bram[ 68] = 24'h753280; bram[ 69] = 24'h75654F; bram[ 70] = 24'h7597F3; bram[ 71] = 24'h75CA6A;
+    bram[ 72] = 24'h75FCB7; bram[ 73] = 24'h762ED9; bram[ 74] = 24'h7660D0; bram[ 75] = 24'h76929E;
+    bram[ 76] = 24'h76C442; bram[ 77] = 24'h76F5BC; bram[ 78] = 24'h77270D; bram[ 79] = 24'h775836;
+    bram[ 80] = 24'h778936; bram[ 81] = 24'h77BA0F; bram[ 82] = 24'h77EABF; bram[ 83] = 24'h781B48;
+    bram[ 84] = 24'h784BAA; bram[ 85] = 24'h787BE6; bram[ 86] = 24'h78ABFA; bram[ 87] = 24'h78DBE9;
+    bram[ 88] = 24'h790BB1; bram[ 89] = 24'h793B54; bram[ 90] = 24'h796AD2; bram[ 91] = 24'h799A2B;
+    bram[ 92] = 24'h79C95F; bram[ 93] = 24'h79F86E; bram[ 94] = 24'h7A2759; bram[ 95] = 24'h7A5621;
+    bram[ 96] = 24'h7A84C4; bram[ 97] = 24'h7AB344; bram[ 98] = 24'h7AE1A2; bram[ 99] = 24'h7B0FDC;
+    bram[100] = 24'h7B3DF3; bram[101] = 24'h7B6BE8; bram[102] = 24'h7B99BC; bram[103] = 24'h7BC76D;
+    bram[104] = 24'h7BF4FC; bram[105] = 24'h7C226A; bram[106] = 24'h7C4FB7; bram[107] = 24'h7C7CE3;
+    bram[108] = 24'h7CA9EF; bram[109] = 24'h7CD6DA; bram[110] = 24'h7D03A4; bram[111] = 24'h7D304F;
+    bram[112] = 24'h7D5CDA; bram[113] = 24'h7D8945; bram[114] = 24'h7DB591; bram[115] = 24'h7DE1BE;
+    bram[116] = 24'h7E0DCC; bram[117] = 24'h7E39BB; bram[118] = 24'h7E658C; bram[119] = 24'h7E913E;
+    bram[120] = 24'h7EBCD3; bram[121] = 24'h7EE849; bram[122] = 24'h7F13A2; bram[123] = 24'h7F3EDD;
+    bram[124] = 24'h7F69FB; bram[125] = 24'h7F94FC; bram[126] = 24'h7FBFE0; bram[127] = 24'h7FEAA7;
+    // Range 1: y in [1.00, 2.00)
+    bram[128] = 24'h802A9C; bram[129] = 24'h807F81; bram[130] = 24'h80D3F6; bram[131] = 24'h8127FC;
+    bram[132] = 24'h817B96; bram[133] = 24'h81CEC4; bram[134] = 24'h822189; bram[135] = 24'h8273E4;
+    bram[136] = 24'h82C5D8; bram[137] = 24'h831766; bram[138] = 24'h83688F; bram[139] = 24'h83B954;
+    bram[140] = 24'h8409B7; bram[141] = 24'h8459B8; bram[142] = 24'h84A959; bram[143] = 24'h84F89A;
+    bram[144] = 24'h85477E; bram[145] = 24'h859605; bram[146] = 24'h85E430; bram[147] = 24'h8631FF;
+    bram[148] = 24'h867F76; bram[149] = 24'h86CC93; bram[150] = 24'h871958; bram[151] = 24'h8765C7;
+    bram[152] = 24'h87B1E0; bram[153] = 24'h87FDA3; bram[154] = 24'h884913; bram[155] = 24'h88942F;
+    bram[156] = 24'h88DEFA; bram[157] = 24'h892972; bram[158] = 24'h89739B; bram[159] = 24'h89BD73;
+    bram[160] = 24'h8A06FD; bram[161] = 24'h8A5039; bram[162] = 24'h8A9927; bram[163] = 24'h8AE1C9;
+    bram[164] = 24'h8B2A20; bram[165] = 24'h8B722B; bram[166] = 24'h8BB9ED; bram[167] = 24'h8C0165;
+    bram[168] = 24'h8C4894; bram[169] = 24'h8C8F7B; bram[170] = 24'h8CD61B; bram[171] = 24'h8D1C75;
+    bram[172] = 24'h8D6288; bram[173] = 24'h8DA857; bram[174] = 24'h8DEDE1; bram[175] = 24'h8E3327;
+    bram[176] = 24'h8E782A; bram[177] = 24'h8EBCEA; bram[178] = 24'h8F0168; bram[179] = 24'h8F45A5;
+    bram[180] = 24'h8F89A1; bram[181] = 24'h8FCD5D; bram[182] = 24'h9010D9; bram[183] = 24'h905416;
+    bram[184] = 24'h909715; bram[185] = 24'h90D9D6; bram[186] = 24'h911C5A; bram[187] = 24'h915EA1;
+    bram[188] = 24'h91A0AC; bram[189] = 24'h91E27B; bram[190] = 24'h92240F; bram[191] = 24'h926568;
+    bram[192] = 24'h92A687; bram[193] = 24'h92E76D; bram[194] = 24'h932819; bram[195] = 24'h93688D;
+    bram[196] = 24'h93A8C8; bram[197] = 24'h93E8CC; bram[198] = 24'h942899; bram[199] = 24'h94682F;
+    bram[200] = 24'h94A78E; bram[201] = 24'h94E6B8; bram[202] = 24'h9525AC; bram[203] = 24'h95646C;
+    bram[204] = 24'h95A2F6; bram[205] = 24'h95E14D; bram[206] = 24'h961F70; bram[207] = 24'h965D60;
+    bram[208] = 24'h969B1D; bram[209] = 24'h96D8A7; bram[210] = 24'h9715FF; bram[211] = 24'h975326;
+    bram[212] = 24'h97901B; bram[213] = 24'h97CCE0; bram[214] = 24'h980974; bram[215] = 24'h9845D8;
+    bram[216] = 24'h98820C; bram[217] = 24'h98BE11; bram[218] = 24'h98F9E7; bram[219] = 24'h99358E;
+    bram[220] = 24'h997106; bram[221] = 24'h99AC51; bram[222] = 24'h99E76E; bram[223] = 24'h9A225E;
+    bram[224] = 24'h9A5D21; bram[225] = 24'h9A97B8; bram[226] = 24'h9AD222; bram[227] = 24'h9B0C60;
+    bram[228] = 24'h9B4672; bram[229] = 24'h9B805A; bram[230] = 24'h9BBA16; bram[231] = 24'h9BF3A7;
+    bram[232] = 24'h9C2D0E; bram[233] = 24'h9C664B; bram[234] = 24'h9C9F5F; bram[235] = 24'h9CD849;
+    bram[236] = 24'h9D1109; bram[237] = 24'h9D49A1; bram[238] = 24'h9D8210; bram[239] = 24'h9DBA57;
+    bram[240] = 24'h9DF276; bram[241] = 24'h9E2A6D; bram[242] = 24'h9E623C; bram[243] = 24'h9E99E4;
+    bram[244] = 24'h9ED166; bram[245] = 24'h9F08C0; bram[246] = 24'h9F3FF4; bram[247] = 24'h9F7702;
+    bram[248] = 24'h9FADEA; bram[249] = 24'h9FE4AD; bram[250] = 24'hA01B4A; bram[251] = 24'hA051C2;
+    bram[252] = 24'hA08815; bram[253] = 24'hA0BE43; bram[254] = 24'hA0F44D; bram[255] = 24'hA12A32;
+    // Range 2: y in [2.00, 4.00)
+    bram[256] = 24'hA17AC8; bram[257] = 24'hA1E5BD; bram[258] = 24'hA25025; bram[259] = 24'hA2BA03;
+    bram[260] = 24'hA32357; bram[261] = 24'hA38C25; bram[262] = 24'hA3F46C; bram[263] = 24'hA45C30;
+    bram[264] = 24'hA4C371; bram[265] = 24'hA52A32; bram[266] = 24'hA59073; bram[267] = 24'hA5F636;
+    bram[268] = 24'hA65B7E; bram[269] = 24'hA6C04A; bram[270] = 24'hA7249E; bram[271] = 24'hA78879;
+    bram[272] = 24'hA7EBDE; bram[273] = 24'hA84ECE; bram[274] = 24'hA8B14A; bram[275] = 24'hA91353;
+    bram[276] = 24'hA974EC; bram[277] = 24'hA9D614; bram[278] = 24'hAA36CE; bram[279] = 24'hAA971A;
+    bram[280] = 24'hAAF6FA; bram[281] = 24'hAB566F; bram[282] = 24'hABB57A; bram[283] = 24'hAC141D;
+    bram[284] = 24'hAC7258; bram[285] = 24'hACD02C; bram[286] = 24'hAD2D9A; bram[287] = 24'hAD8AA5;
+    bram[288] = 24'hADE74C; bram[289] = 24'hAE4390; bram[290] = 24'hAE9F74; bram[291] = 24'hAEFAF7;
+    bram[292] = 24'hAF561B; bram[293] = 24'hAFB0E0; bram[294] = 24'hB00B48; bram[295] = 24'hB06553;
+    bram[296] = 24'hB0BF03; bram[297] = 24'hB11858; bram[298] = 24'hB17154; bram[299] = 24'hB1C9F7;
+    bram[300] = 24'hB22241; bram[301] = 24'hB27A34; bram[302] = 24'hB2D1D1; bram[303] = 24'hB32919;
+    bram[304] = 24'hB3800C; bram[305] = 24'hB3D6AA; bram[306] = 24'hB42CF6; bram[307] = 24'hB482F0;
+    bram[308] = 24'hB4D897; bram[309] = 24'hB52DEE; bram[310] = 24'hB582F5; bram[311] = 24'hB5D7AC;
+    bram[312] = 24'hB62C15; bram[313] = 24'hB68030; bram[314] = 24'hB6D3FE; bram[315] = 24'hB7277F;
+    bram[316] = 24'hB77AB4; bram[317] = 24'hB7CD9E; bram[318] = 24'hB8203D; bram[319] = 24'hB87293;
+    bram[320] = 24'hB8C49F; bram[321] = 24'hB91663; bram[322] = 24'hB967DF; bram[323] = 24'hB9B913;
+    bram[324] = 24'hBA0A01; bram[325] = 24'hBA5AA8; bram[326] = 24'hBAAB0A; bram[327] = 24'hBAFB27;
+    bram[328] = 24'hBB4AFF; bram[329] = 24'hBB9A94; bram[330] = 24'hBBE9E5; bram[331] = 24'hBC38F3;
+    bram[332] = 24'hBC87C0; bram[333] = 24'hBCD64A; bram[334] = 24'hBD2494; bram[335] = 24'hBD729D;
+    bram[336] = 24'hBDC066; bram[337] = 24'hBE0DEF; bram[338] = 24'hBE5B39; bram[339] = 24'hBEA845;
+    bram[340] = 24'hBEF512; bram[341] = 24'hBF41A2; bram[342] = 24'hBF8DF5; bram[343] = 24'hBFDA0B;
+    bram[344] = 24'hC025E6; bram[345] = 24'hC07184; bram[346] = 24'hC0BCE7; bram[347] = 24'hC1080F;
+    bram[348] = 24'hC152FD; bram[349] = 24'hC19DB2; bram[350] = 24'hC1E82C; bram[351] = 24'hC2326E;
+    bram[352] = 24'hC27C77; bram[353] = 24'hC2C647; bram[354] = 24'hC30FE0; bram[355] = 24'hC35942;
+    bram[356] = 24'hC3A26D; bram[357] = 24'hC3EB61; bram[358] = 24'hC4341F; bram[359] = 24'hC47CA7;
+    bram[360] = 24'hC4C4F9; bram[361] = 24'hC50D17; bram[362] = 24'hC55500; bram[363] = 24'hC59CB5;
+    bram[364] = 24'hC5E436; bram[365] = 24'hC62B83; bram[366] = 24'hC6729E; bram[367] = 24'hC6B985;
+    bram[368] = 24'hC7003A; bram[369] = 24'hC746BD; bram[370] = 24'hC78D0E; bram[371] = 24'hC7D32E;
+    bram[372] = 24'hC8191C; bram[373] = 24'hC85EDA; bram[374] = 24'hC8A467; bram[375] = 24'hC8E9C5;
+    bram[376] = 24'hC92EF2; bram[377] = 24'hC973F0; bram[378] = 24'hC9B8BF; bram[379] = 24'hC9FD60;
+    bram[380] = 24'hCA41D1; bram[381] = 24'hCA8615; bram[382] = 24'hCACA2A; bram[383] = 24'hCB0E12;
+    end
+
+endmodule

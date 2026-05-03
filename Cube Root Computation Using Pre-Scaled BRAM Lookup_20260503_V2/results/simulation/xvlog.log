@@ -1,0 +1,4 @@
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/rtl/cube_root_bram_ultra_3cyc.v" into library work
+INFO: [VRFC 10-311] analyzing module cube_root_bram_ultra_3cyc
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/sim/tb_cube_root_bram_ultra_3cyc.v" into library work
+INFO: [VRFC 10-311] analyzing module tb_cube_root_bram_ultra_3cyc

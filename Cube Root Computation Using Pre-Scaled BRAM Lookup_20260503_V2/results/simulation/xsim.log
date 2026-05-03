@@ -1,0 +1,42 @@
+#-----------------------------------------------------------
+# xsim v2018.3 (64-bit)
+# SW Build 2405991 on Thu Dec  6 23:38:27 MST 2018
+# IP Build 2404404 on Fri Dec  7 01:43:56 MST 2018
+# Start of session at: Sat May  2 18:15:23 2026
+# Process ID: 25444
+# Current directory: E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/build/sim_output
+# Command line: xsim.exe -mode tcl -source {xsim.dir/tb_cube_root_bram_ultra_3cyc_sim/xsim_script.tcl}
+# Log file: E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/build/sim_output/xsim.log
+# Journal file: E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/build/sim_output\xsim.jou
+#-----------------------------------------------------------
+source xsim.dir/tb_cube_root_bram_ultra_3cyc_sim/xsim_script.tcl
+# xsim {tb_cube_root_bram_ultra_3cyc_sim} -autoloadwcfg -runall
+Vivado Simulator 2018.3
+Time resolution is 1 ps
+run -all
+============================================
+ tb_cube_root_bram_ultra_3cyc
+============================================
+Latency: 3 cycles (expected 3)
+
+--- Boundary tests ---
+
+--- Exhaustive BRAM midpoint test (384 entries) ---
+
+--- Random tests (100 samples) ---
+
+============================================
+ TEST SUMMARY
+============================================
+ Total tests   : 490
+ Passed        : 490
+ Failed        : 0
+ Max rel error : 0.1300% (paper: 0.13%)
+ Avg rel error : 0.0098%
+ Latency       : 3 cycles (paper: 3)
+============================================
+ >>> ALL TESTS PASSED <<<
+============================================
+$finish called at time : 19700 ns : File "E:/academic_research/laptop_SR/paper2026/paper1/code repository/cube_root_reproducibility_release_20260502/sim/tb_cube_root_bram_ultra_3cyc.v" Line 195
+exit
+INFO: [Common 17-206] Exiting xsim at Sat May  2 18:15:26 2026...

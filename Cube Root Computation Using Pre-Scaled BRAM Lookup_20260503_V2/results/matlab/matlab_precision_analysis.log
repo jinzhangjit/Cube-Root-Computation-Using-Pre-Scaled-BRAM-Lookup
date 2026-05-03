@@ -1,0 +1,46 @@
+==========================================================
+ Theoretical Precision Analysis -- Proposed Method
+ Pre-Scaled BRAM Cube Root Architecture
+==========================================================
+
+Step 1: Per-Subinterval Error Bound
+----------------------------------------------
+  Formula: |eps_a|_max <= W_r / (6 * N * L_r^(2/3))
+  Formula: p_eff       = -log2(|eps_a|_max / x_min),  x_min = L_r^(1/3)
+
+  Sub-int | [L_r, L_r+W_r) | L_r^(2/3)    | |eps_a|_max  | eps_rel_max(%) | p_eff(bit)
+  --------------------------------------------------------------------------------------
+  D_0     | [0.50, 1.00)  | 0.6300       | 1.0335e-03   | 0.1302       | 9.5850    
+  D_1     | [1.00, 2.00)  | 1.0000       | 1.3021e-03   | 0.1302       | 9.5850    
+  D_2     | [2.00, 4.00)  | 1.5874       | 1.6405e-03   | 0.1302       | 9.5850    
+
+  Worst-case sub-interval : D_2
+  Maximum relative error  : 1.3021e-03 (0.1302 %)
+  THEORETICAL EFFECTIVE PRECISION : 9.5850 bits
+
+Step 2: Empirical Verification on 100000 Q2.22 Test Points
+--------------------------------------------------------
+  Maximum relative error   : 0.1300 %  (theoretical 0.1302 %)
+  Average relative error   : 0.0451 %
+  Measured effective bits  : 9.5868 bits  (theoretical 9.5850 bits)
+
+Generating Fig. 4: Relative error vs. input y ...
+  Saved: ..\results\matlab\fig4_rel_error.png
+
+Generating Fig. 5: Probability density of relative error ...
+  Saved: ..\results\matlab\fig5_error_pdf.png
+
+==========================================================
+ SUMMARY 
+==========================================================
+  Theoretical max relative error   : 0.1302 %
+  Measured    max relative error   : 0.1300 %
+  Average     relative error       : 0.0451 %
+  Theoretical effective precision  : 9.5850 bits
+  Measured    effective precision  : 9.5868 bits
+==========================================================
+ Generated files:
+   ..\results\matlab\matlab_precision_analysis.log
+   ..\results\matlab\fig4_rel_error.png
+   ..\results\matlab\fig5_error_pdf.png
+==========================================================

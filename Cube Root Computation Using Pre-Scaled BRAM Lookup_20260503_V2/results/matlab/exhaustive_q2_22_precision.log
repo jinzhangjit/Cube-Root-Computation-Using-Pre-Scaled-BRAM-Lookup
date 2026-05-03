@@ -1,0 +1,12 @@
+EXHAUSTIVE_Q2_22_RESULTS
+entries=384
+points=14680064
+max_rel_percent=0.13004450
+avg_rel_percent=0.04512675
+effective_bits=9.58677891
+max_input_hex=0x200000
+max_input_y=0.5000000000
+r=0 points=2097152 max_rel_percent=0.13004450 avg_rel_percent=0.04512675 max_input_hex=0x200000 max_input_y=0.5000000000
+r=1 points=4194304 max_rel_percent=0.13003349 avg_rel_percent=0.04512675 max_input_hex=0x400000 max_input_y=1.0000000000
+r=2 points=8388608 max_rel_percent=0.13004279 avg_rel_percent=0.04512674 max_input_hex=0x800000 max_input_y=2.0000000000
+elapsed_sec=8.89
